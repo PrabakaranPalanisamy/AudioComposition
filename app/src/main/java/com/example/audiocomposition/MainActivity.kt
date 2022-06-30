@@ -1,5 +1,6 @@
 package com.example.audiocomposition
 
+import Videocompress.Companion.mergeAudioVideo
 import android.Manifest
 import android.content.ContentProvider
 import android.content.Context
@@ -13,11 +14,13 @@ import android.util.Log
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.example.audiocomposition.videooperations.Switchfile
 import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.source.MediaSource
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
@@ -26,6 +29,7 @@ import com.google.android.exoplayer2.upstream.DataSource
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
 import com.pro.audiotrimmer.AudioTrimmerView
 import java.io.*
+import java.net.URISyntaxException
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -39,6 +43,7 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
     var videoUri: Uri? = null
 
     var imgPlayPauseAudio: ImageView? = null
+    var imgExport: ImageView? = null
     var txtAudioDuration: TextView? = null
 
     //    var audioUri: Uri? = null
@@ -68,6 +73,17 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
         chosenVideoFile = null
         super.onDestroy()
 
+    }
+
+    override fun onPause() {
+        super.onPause()
+        imgPlayPauseAudio!!.setImageDrawable(
+            baseContext.resources.getDrawable(
+                R.drawable.ic_play
+            )
+        )
+        mediaPlayer?.pause()
+        exoPlayer?.pause()
     }
 
     private fun initializePlayer(vidioUri: Uri) {
@@ -100,6 +116,7 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
         expVideoPlayer = findViewById<PlayerView>(R.id.expVideoPlayer);
         imgPlayPauseAudio = findViewById<ImageView>(R.id.imgPlayPauseAudio);
         txtAudioDuration = findViewById<TextView>(R.id.txtAudioDuration);
+        imgExport = findViewById<ImageView>(R.id.imgExport);
         val onActivityResultLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult(),
             object : ActivityResultCallback<ActivityResult> {
@@ -155,8 +172,7 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
             if (checkPermission()) {
                 val intent = Intent()
                 intent.action = Intent.ACTION_GET_CONTENT
-                intent.type = "*/*"
-                intent.type = "*/*"
+                intent.type = "audio/*"
                 onActivityResultLauncher.launch(intent)
             } else {
                 requestPermissionLauncher.launch(
@@ -165,6 +181,35 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
             }
         }
 
+        imgExport!!.setOnClickListener {
+            try {
+                var videoDuration =Math.abs( extractAudioLength(chosenVideoFile!!.path)/1000).toString()
+                Log.e("imgExport ","videoDuration "+videoDuration)
+                var videoOffset = "00:00:00"
+                var duration = Math.abs((endTimeMillis-startTimeMillis)/1000).toString();
+                if(duration>videoDuration)
+                    duration=videoDuration
+                Log.e("imgExport ","audioduraation "+duration)
+                var offset =timeConversion(startTimeMillis).toString()
+                Log.e("imgExport ","offset "+offset)
+                val filePath =
+                    mergeAudioVideo(
+                        chosenAudioFile!!.getPath(),
+                        chosenVideoFile!!.getPath(), offset,duration,videoOffset,videoDuration,
+                        this,
+                        object : Switchfile {
+                            @Throws(URISyntaxException::class)
+                            override fun getFile(file: String?) {
+                                Log.e("filesize", "after::" + File(file).length() / 1024f)
+                                runOnUiThread {
+                                   Toast.makeText(this@MainActivity,"composition sucess ",Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        })
+            } catch (e: FileNotFoundException) {
+                e.printStackTrace()
+            }
+        }
         btnMerge.setOnClickListener {
 
             if (audioUri != null && videoUri != null) {
@@ -178,12 +223,14 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
                     val directory: File = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!
                     val file = File(directory.toString())
                     val outputFile =
-                        file.toString() + File.separator + FILE_NAM + "_audiotmp.mp4"
+                        file.toString() + File.separator + FILE_NAM + "_audiotmp.mp3"
                     ins = baseContext.getContentResolver().openInputStream(audioUri!!)!!
                     chosenAudioFile = createFileFromInputStream(ins, outputFile)
                     audiview!!.setAudio(chosenAudioFile!!);
                     audiview!!.show()
                     audiview!!.setTotalAudioLength(extractAudioLength(chosenAudioFile!!.path))
+                    audiview!!.setMaxDuration(extractAudioLength(chosenVideoFile!!.path));
+                    audiview!!.setMinDuration(extractAudioLength(chosenVideoFile!!.path))
 //                    audiview!!.setExtraDragSpace(80F)
 //                    audiview!!.setMinDuration(10000)
                     getDummyWaveSample()
@@ -208,7 +255,21 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
         }
 
     }
-
+    fun timeConversion(millie: Long?): String? {
+        return if (millie != null) {
+            val seconds = millie / 1000
+            val sec = seconds % 60
+            val min = seconds / 60 % 60
+            val hrs = seconds / (60 * 60) % 24
+            if (hrs > 0) {
+                String.format("%02d:%02d:%02d", hrs, min, sec)
+            } else {
+                String.format("%02d:%02d", min, sec)
+            }
+        } else {
+            null
+        }
+    }
     private fun checkPermission(): Boolean {
 
         return (ContextCompat.checkSelfPermission(
@@ -223,7 +284,7 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
         val FILE_NAM = "audiovideomerge"
         val directory: File = getExternalFilesDir(Environment.DIRECTORY_MOVIES)!!
         val audioFile = File(directory.toString())
-        val outputAudioFilePath = audioFile.toString() + File.separator + FILE_NAM + "_audiotmp.mp4"
+        val outputAudioFilePath = audioFile.toString() + File.separator + FILE_NAM + "_audiotmp.mp3"
         audioInputStream = baseContext.getContentResolver().openInputStream(audioUri!!)!!
         chosenAudioFile = createFileFromInputStream(audioInputStream, outputAudioFilePath)
     }
@@ -294,7 +355,7 @@ class MainActivity : AppCompatActivity(), AudioTrimmerView.OnSelectedRangeChange
             }
             if (mHandler == null)
                 mHandler = Handler(Looper.getMainLooper())
-            audiview!!.setMaxDuration((mediaPlayer!!.duration.toLong())/1000);
+
             endTimeMillis=mediaPlayer!!.duration.toLong()
 
 //           previewSeekbar.setOnSeekBarChangeListener(object :

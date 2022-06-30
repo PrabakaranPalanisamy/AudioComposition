@@ -4,7 +4,17 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/black"
     tools:context=".MainActivity">
+
+    <ImageView
+        android:id="@+id/imgExport"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:padding="20dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:srcCompat="@drawable/ic_selected" />
 
     <Button
         android:id="@+id/btnchooseAudio"
@@ -47,7 +57,9 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:show_buffering="always" />
+        app:show_buffering="always" >
+
+    </com.google.android.exoplayer2.ui.PlayerView>
 
     <ImageView
         android:id="@+id/imgPlayPauseAudio"
@@ -76,7 +88,7 @@
         android:paddingTop="20dp"
 
         android:paddingBottom="20dp"
-        app:layout_constraintBottom_toBottomOf="parent">
+       app:layout_constraintBottom_toTopOf="@id/imgExport">
 
         <com.pro.audiotrimmer.AudioTrimmerView
             android:id="@+id/audioTrimmer"
